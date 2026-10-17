@@ -45,7 +45,7 @@ func TestNewMultiRegistry(t *testing.T) {
 	registry.WAFRequestsCounter().With("middleware", "waf", "outcome", "blocked").Add(1)
 	registry.WAFInterruptionsCounter().With("middleware", "waf", "action", "deny").Add(1)
 	registry.WAFRequestDurationHistogram().With("middleware", "waf", "outcome", "blocked").Observe(float64(2))
-	registry.WAFRuleMatchesCounter().With("middleware", "waf", "rule_id", "101").Add(3)
+	registry.WAFRuleMatchesCounter().With("middleware", "waf", "severity", "critical").Add(3)
 
 	for _, collectingRegistry := range registries {
 		cReqsCounter := collectingRegistry.ServiceReqsCounter().(*counterWithHeadersMock)
@@ -81,7 +81,7 @@ func TestNewMultiRegistry(t *testing.T) {
 		assert.Equal(t, float64(2), cWAFDuration.lastHistogramValue)
 		assert.Equal(t, []string{"middleware", "waf", "outcome", "blocked"}, cWAFDuration.lastLabelValues)
 		assert.Equal(t, float64(3), cWAFRuleMatches.counterValue)
-		assert.Equal(t, []string{"middleware", "waf", "rule_id", "101"}, cWAFRuleMatches.lastLabelValues)
+		assert.Equal(t, []string{"middleware", "waf", "severity", "critical"}, cWAFRuleMatches.lastLabelValues)
 	}
 }
 

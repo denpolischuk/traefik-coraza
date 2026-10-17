@@ -49,9 +49,9 @@ InfluxDB, or StatsD):
 | Metric | Type | Labels | Description |
 |:--|:--|:--|:--|
 | `traefik_waf_requests_total` | Counter | `middleware`, `outcome` | Requests processed by the WAF. `outcome` is `allowed`, `detected` (rules matched without an interruption), `blocked`, or `redirected`. |
-| `traefik_waf_interruptions_total` | Counter | `middleware`, `action`, `rule_id`, `phase`, `status` | Disruptive WAF actions, including the rule and phase that caused them. |
+| `traefik_waf_interruptions_total` | Counter | `middleware`, `action`, `severity` | Disruptive WAF actions and the severity of the triggering rule. |
 | `traefik_waf_request_duration_seconds` | Histogram | `middleware`, `outcome` | Time spent in the WAF for a request, including request and response inspection. |
-| `traefik_waf_rule_matches_total` | Counter | `middleware`, `rule_id`, `severity` | Rule matches, including non-disruptive matches in detection-only mode. |
+| `traefik_waf_rule_matches_total` | Counter | `middleware`, `severity` | Rule matches, including non-disruptive matches in detection-only mode. |
 
 Backend-specific naming may differ. For example, Datadog and StatsD use names
 such as `waf.request.total`, `waf.interruptions.total`,
@@ -59,9 +59,12 @@ such as `waf.request.total`, `waf.interruptions.total`,
 
 !!! note
 
-    `rule_id` can produce a large number of series when the full OWASP CRS is
-    loaded. Keep that in mind when selecting metrics, retention, and scrape
-    intervals.
+    WAF metrics intentionally omit `rule_id`, phase, and status labels to keep
+    cardinality bounded. Rule IDs are user-defined and can grow without bound as
+    rules and middleware instances are added. For per-rule detail, including the
+    rule ID, phase, matched data, and transaction ID, use Coraza audit logs
+    (`SecAuditLog`, `SecAuditLogParts`, and `SecAuditLogFormat`) or access logs
+    instead of metrics.
 
 ## OWASP Core Rule Set
 

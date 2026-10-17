@@ -41,12 +41,10 @@ func TestRegistryWAFMetrics_Record(t *testing.T) {
 	assert.Equal(t, []string{
 		"middleware", "waf",
 		"action", "deny",
-		"rule_id", "101",
-		"phase", "1",
-		"status", "403",
+		"severity", "critical",
 	}, interruptions.lastLabels)
 	assert.Equal(t, float64(1), ruleMatches.total)
-	assert.Equal(t, []string{"middleware", "waf", "rule_id", "101", "severity", "critical"}, ruleMatches.lastLabels)
+	assert.Equal(t, []string{"middleware", "waf", "severity", "critical"}, ruleMatches.lastLabels)
 	require.Len(t, duration.values, 1)
 	assert.InDelta(t, 0.01, duration.values[0], 1e-9)
 	assert.Equal(t, []string{"middleware", "waf", "outcome", "blocked"}, duration.lastLabels)
@@ -95,7 +93,6 @@ type fakeRuleMetadata struct {
 
 func (f fakeRuleMetadata) ID() int                      { return 101 }
 func (f fakeRuleMetadata) Severity() types.RuleSeverity { return types.RuleSeverityCritical }
-func (f fakeRuleMetadata) Phase() types.RulePhase       { return types.PhaseRequestHeaders }
 
 type fakeMatchedRule struct {
 	types.MatchedRule

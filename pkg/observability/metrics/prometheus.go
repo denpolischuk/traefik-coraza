@@ -280,8 +280,8 @@ func initStandardRegistry(config *otypes.Prometheus) Registry {
 	}, []string{"middleware", "outcome"})
 	wafInterruptions := newCounterFrom(stdprometheus.CounterOpts{
 		Name: wafInterruptionsTotalName,
-		Help: "How many WAF interruptions occurred, partitioned by middleware, action, rule, phase, and status.",
-	}, []string{"middleware", "action", "rule_id", "phase", "status"})
+		Help: "How many WAF interruptions occurred, partitioned by middleware, action, and severity.",
+	}, []string{"middleware", "action", "severity"})
 	wafRequestDurations := newHistogramFrom(stdprometheus.HistogramOpts{
 		Name:    wafRequestDurationName,
 		Help:    "How long the WAF took to process a request, partitioned by middleware and outcome.",
@@ -289,8 +289,8 @@ func initStandardRegistry(config *otypes.Prometheus) Registry {
 	}, []string{"middleware", "outcome"})
 	wafRuleMatches := newCounterFrom(stdprometheus.CounterOpts{
 		Name: wafRuleMatchesTotalName,
-		Help: "How many WAF rules matched, partitioned by middleware, rule, and severity.",
-	}, []string{"middleware", "rule_id", "severity"})
+		Help: "How many WAF rules matched, partitioned by middleware and severity.",
+	}, []string{"middleware", "severity"})
 
 	promState.vectors = append(promState.vectors,
 		wafRequests.cv,

@@ -1,8 +1,6 @@
 package coraza
 
 import (
-	"net/http"
-	"strconv"
 	"sync"
 	"time"
 
@@ -52,26 +50,19 @@ func (m *registryWAFMetrics) record(outcome string, duration time.Duration, inte
 	m.duration.With("middleware", m.middleware, "outcome", outcome).Observe(duration.Seconds())
 
 	if interruption != nil {
-		phase := "0"
+		severity := "unknown"
 		for _, matchedRule := range matchedRules {
 			rule := matchedRule.Rule()
 			if rule != nil && rule.ID() == interruption.RuleID {
-				phase = strconv.Itoa(int(rule.Phase()))
+				severity = rule.Severity().String()
 				break
 			}
-		}
-
-		status := interruption.Status
-		if status == 0 {
-			status = http.StatusForbidden
 		}
 
 		m.interruptions.With(
 			"middleware", m.middleware,
 			"action", interruption.Action,
-			"rule_id", strconv.Itoa(interruption.RuleID),
-			"phase", phase,
-			"status", strconv.Itoa(status),
+			"severity", severity,
 		).Add(1)
 	}
 
@@ -83,7 +74,6 @@ func (m *registryWAFMetrics) record(outcome string, duration time.Duration, inte
 
 		m.ruleMatches.With(
 			"middleware", m.middleware,
-			"rule_id", strconv.Itoa(rule.ID()),
 			"severity", rule.Severity().String(),
 		).Add(1)
 	}
