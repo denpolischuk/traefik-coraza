@@ -8,10 +8,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	traefikmetrics "github.com/traefik/traefik/v3/pkg/observability/metrics"
 )
 
 func TestNew_RequiresDirectives(t *testing.T) {
-	_, err := New(context.Background(), http.NotFoundHandler(), Configuration{}, "test")
+	_, err := New(context.Background(), http.NotFoundHandler(), Configuration{}, "test", traefikmetrics.NewVoidRegistry())
 	require.EqualError(t, err, "missing directives values")
 }
 
@@ -40,7 +41,7 @@ func TestMiddleware_DenyRequest(t *testing.T) {
 		},
 	}
 
-	handler, err := New(context.Background(), next, config, "test")
+	handler, err := New(context.Background(), next, config, "test", traefikmetrics.NewVoidRegistry())
 	require.NoError(t, err)
 
 	t.Run("blocked", func(t *testing.T) {
@@ -82,7 +83,7 @@ func TestMiddleware_DenyResponse(t *testing.T) {
 		},
 	}
 
-	handler, err := New(context.Background(), next, config, "test")
+	handler, err := New(context.Background(), next, config, "test", traefikmetrics.NewVoidRegistry())
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, "http://example.com/", nil)
@@ -104,7 +105,7 @@ func TestMiddleware_CRSCompiles(t *testing.T) {
 		},
 	}
 
-	handler, err := New(context.Background(), http.NotFoundHandler(), config, "test")
+	handler, err := New(context.Background(), http.NotFoundHandler(), config, "test", traefikmetrics.NewVoidRegistry())
 	require.NoError(t, err)
 	require.NotNil(t, handler)
 }

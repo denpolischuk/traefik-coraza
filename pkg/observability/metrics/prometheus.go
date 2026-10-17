@@ -55,6 +55,13 @@ const (
 	serviceServerUpName        = metricServicePrefix + "server_up"
 	serviceReqsBytesTotalName  = metricServicePrefix + "requests_bytes_total"
 	serviceRespsBytesTotalName = metricServicePrefix + "responses_bytes_total"
+
+	// WAF level.
+	metricWAFPrefix           = MetricNamePrefix + "waf_"
+	wafRequestsTotalName      = metricWAFPrefix + "requests_total"
+	wafInterruptionsTotalName = metricWAFPrefix + "interruptions_total"
+	wafRequestDurationName    = metricWAFPrefix + "request_duration_seconds"
+	wafRuleMatchesTotalName   = metricWAFPrefix + "rule_matches_total"
 )
 
 // promState holds all metric state internally and acts as the only Collector we register for Prometheus.
@@ -266,6 +273,36 @@ func initStandardRegistry(config *otypes.Prometheus) Registry {
 		reg.serviceReqsBytesCounter = serviceReqsBytesTotal
 		reg.serviceRespsBytesCounter = serviceRespsBytesTotal
 	}
+
+	wafRequests := newCounterFrom(stdprometheus.CounterOpts{
+		Name: wafRequestsTotalName,
+		Help: "How many HTTP requests were processed by the WAF, partitioned by middleware and outcome.",
+	}, []string{"middleware", "outcome"})
+	wafInterruptions := newCounterFrom(stdprometheus.CounterOpts{
+		Name: wafInterruptionsTotalName,
+		Help: "How many WAF interruptions occurred, partitioned by middleware, action, rule, phase, and status.",
+	}, []string{"middleware", "action", "rule_id", "phase", "status"})
+	wafRequestDurations := newHistogramFrom(stdprometheus.HistogramOpts{
+		Name:    wafRequestDurationName,
+		Help:    "How long the WAF took to process a request, partitioned by middleware and outcome.",
+		Buckets: buckets,
+	}, []string{"middleware", "outcome"})
+	wafRuleMatches := newCounterFrom(stdprometheus.CounterOpts{
+		Name: wafRuleMatchesTotalName,
+		Help: "How many WAF rules matched, partitioned by middleware, rule, and severity.",
+	}, []string{"middleware", "rule_id", "severity"})
+
+	promState.vectors = append(promState.vectors,
+		wafRequests.cv,
+		wafInterruptions.cv,
+		wafRequestDurations.hv,
+		wafRuleMatches.cv,
+	)
+
+	reg.wafRequestsCounter = wafRequests
+	reg.wafInterruptionsCounter = wafInterruptions
+	reg.wafRequestDurationHistogram, _ = NewHistogramWithScale(wafRequestDurations, time.Second)
+	reg.wafRuleMatchesCounter = wafRuleMatches
 
 	return reg
 }

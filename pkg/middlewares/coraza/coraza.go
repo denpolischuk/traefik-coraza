@@ -7,6 +7,7 @@ import (
 
 	corazahttp "github.com/corazawaf/coraza/v3/http"
 	"github.com/traefik/traefik/v3/pkg/middlewares"
+	traefikmetrics "github.com/traefik/traefik/v3/pkg/observability/metrics"
 )
 
 type wafMiddleware struct {
@@ -17,17 +18,17 @@ type wafMiddleware struct {
 }
 
 // FromPlugin creates a native Coraza middleware from a plugin-style configuration.
-func FromPlugin(ctx context.Context, next http.Handler, rawConfig map[string]any, name string) (http.Handler, error) {
+func FromPlugin(ctx context.Context, next http.Handler, rawConfig map[string]any, name string, registry traefikmetrics.Registry) (http.Handler, error) {
 	config, err := decodeConfiguration(rawConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	return New(ctx, next, config, name)
+	return New(ctx, next, config, name, registry)
 }
 
 // New creates a native Coraza middleware.
-func New(ctx context.Context, next http.Handler, config Configuration, name string) (http.Handler, error) {
+func New(ctx context.Context, next http.Handler, config Configuration, name string, registry traefikmetrics.Registry) (http.Handler, error) {
 	logger := middlewares.GetLogger(ctx, name, typeName)
 
 	if err := config.Validate(); err != nil {
@@ -43,7 +44,7 @@ func New(ctx context.Context, next http.Handler, config Configuration, name stri
 
 	middleware := &wafMiddleware{
 		name:    name,
-		handler: corazahttp.WrapHandler(waf, next),
+		handler: corazahttp.WrapHandler(newMetricsWAF(waf, newWAFMetrics(registry, name)), next),
 		manager: defaultWAFManager,
 		hash:    hash,
 	}

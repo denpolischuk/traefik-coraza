@@ -42,6 +42,11 @@ func TestNewMultiRegistry(t *testing.T) {
 	registry.ServiceReqDurationHistogram().With("key", "durations").Observe(float64(2))
 	registry.ServiceRetriesCounter().With("key", "retries").Add(3)
 
+	registry.WAFRequestsCounter().With("middleware", "waf", "outcome", "blocked").Add(1)
+	registry.WAFInterruptionsCounter().With("middleware", "waf", "action", "deny").Add(1)
+	registry.WAFRequestDurationHistogram().With("middleware", "waf", "outcome", "blocked").Observe(float64(2))
+	registry.WAFRuleMatchesCounter().With("middleware", "waf", "rule_id", "101").Add(3)
+
 	for _, collectingRegistry := range registries {
 		cReqsCounter := collectingRegistry.ServiceReqsCounter().(*counterWithHeadersMock)
 		cReqDurationHistogram := collectingRegistry.ServiceReqDurationHistogram().(*histogramMock)
@@ -63,6 +68,20 @@ func TestNewMultiRegistry(t *testing.T) {
 		assert.Equal(t, []string{"key", "requests"}, cReqsCounter.lastLabelValues)
 		assert.Equal(t, []string{"key", "durations"}, cReqDurationHistogram.lastLabelValues)
 		assert.Equal(t, []string{"key", "retries"}, cRetriesCounter.lastLabelValues)
+
+		cWAFRequests := collectingRegistry.WAFRequestsCounter().(*counterMock)
+		cWAFInterruptions := collectingRegistry.WAFInterruptionsCounter().(*counterMock)
+		cWAFDuration := collectingRegistry.WAFRequestDurationHistogram().(*histogramMock)
+		cWAFRuleMatches := collectingRegistry.WAFRuleMatchesCounter().(*counterMock)
+
+		assert.Equal(t, float64(1), cWAFRequests.counterValue)
+		assert.Equal(t, []string{"middleware", "waf", "outcome", "blocked"}, cWAFRequests.lastLabelValues)
+		assert.Equal(t, float64(1), cWAFInterruptions.counterValue)
+		assert.Equal(t, []string{"middleware", "waf", "action", "deny"}, cWAFInterruptions.lastLabelValues)
+		assert.Equal(t, float64(2), cWAFDuration.lastHistogramValue)
+		assert.Equal(t, []string{"middleware", "waf", "outcome", "blocked"}, cWAFDuration.lastLabelValues)
+		assert.Equal(t, float64(3), cWAFRuleMatches.counterValue)
+		assert.Equal(t, []string{"middleware", "waf", "rule_id", "101"}, cWAFRuleMatches.lastLabelValues)
 	}
 }
 
@@ -71,6 +90,10 @@ func newCollectingRetryMetrics() Registry {
 		serviceReqsCounter:          &counterWithHeadersMock{},
 		serviceReqDurationHistogram: &histogramMock{},
 		serviceRetriesCounter:       &counterMock{},
+		wafRequestsCounter:          &counterMock{},
+		wafInterruptionsCounter:     &counterMock{},
+		wafRequestDurationHistogram: &histogramMock{},
+		wafRuleMatchesCounter:       &counterMock{},
 	}
 }
 

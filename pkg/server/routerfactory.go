@@ -109,7 +109,8 @@ func (f *RouterFactory) CreateRouters(rtConf *runtime.Configuration) (map[string
 	// HTTP
 	serviceManager := f.managerFactory.Build(rtConf)
 
-	middlewaresBuilder := middleware.NewBuilder(rtConf.Middlewares, serviceManager, f.pluginBuilder)
+	middlewaresBuilder := middleware.NewBuilder(rtConf.Middlewares, serviceManager, f.pluginBuilder).
+		SetMetricsRegistry(f.observabilityMgr.MetricsRegistry())
 
 	serviceManager.SetMiddlewareChainBuilder(middlewaresBuilder)
 

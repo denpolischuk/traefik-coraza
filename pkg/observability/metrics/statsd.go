@@ -42,6 +42,11 @@ const (
 	statsdServiceServerUpName     = "service.server.up"
 	statsdServiceReqsBytesName    = "service.requests.bytes.total"
 	statsdServiceRespsBytesName   = "service.responses.bytes.total"
+
+	statsdWAFRequestsName        = "waf.request.total"
+	statsdWAFInterruptionsName   = "waf.interruptions.total"
+	statsdWAFRequestDurationName = "waf.request.duration"
+	statsdWAFRuleMatchesName     = "waf.rule.matches.total"
 )
 
 // RegisterStatsd registers the metrics pusher if this didn't happen yet and creates a statsd Registry instance.
@@ -92,6 +97,11 @@ func RegisterStatsd(ctx context.Context, config *otypes.Statsd) Registry {
 		registry.serviceReqsBytesCounter = statsdClient.NewCounter(statsdServiceReqsBytesName, 1.0)
 		registry.serviceRespsBytesCounter = statsdClient.NewCounter(statsdServiceRespsBytesName, 1.0)
 	}
+
+	registry.wafRequestsCounter = statsdClient.NewCounter(statsdWAFRequestsName, 1.0)
+	registry.wafInterruptionsCounter = statsdClient.NewCounter(statsdWAFInterruptionsName, 1.0)
+	registry.wafRequestDurationHistogram, _ = NewHistogramWithScale(statsdClient.NewTiming(statsdWAFRequestDurationName, 1.0), time.Millisecond)
+	registry.wafRuleMatchesCounter = statsdClient.NewCounter(statsdWAFRuleMatchesName, 1.0)
 
 	return registry
 }

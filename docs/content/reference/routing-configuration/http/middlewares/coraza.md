@@ -40,6 +40,29 @@ used for compatibility; no plugin is downloaded or interpreted at runtime.
 At least one directive is required. `SecRuleEngine On` is required to enforce
 rules; without it, Coraza defaults may leave the engine in detection-only mode.
 
+## Metrics
+
+When Traefik metrics are enabled, the native WAF exports the following metrics
+through the configured metrics backend (Prometheus, OpenTelemetry, Datadog,
+InfluxDB, or StatsD):
+
+| Metric | Type | Labels | Description |
+|:--|:--|:--|:--|
+| `traefik_waf_requests_total` | Counter | `middleware`, `outcome` | Requests processed by the WAF. `outcome` is `allowed`, `detected` (rules matched without an interruption), `blocked`, or `redirected`. |
+| `traefik_waf_interruptions_total` | Counter | `middleware`, `action`, `rule_id`, `phase`, `status` | Disruptive WAF actions, including the rule and phase that caused them. |
+| `traefik_waf_request_duration_seconds` | Histogram | `middleware`, `outcome` | Time spent in the WAF for a request, including request and response inspection. |
+| `traefik_waf_rule_matches_total` | Counter | `middleware`, `rule_id`, `severity` | Rule matches, including non-disruptive matches in detection-only mode. |
+
+Backend-specific naming may differ. For example, Datadog and StatsD use names
+such as `waf.request.total`, `waf.interruptions.total`,
+`waf.request.duration`, and `waf.rule.matches.total`.
+
+!!! note
+
+    `rule_id` can produce a large number of series when the full OWASP CRS is
+    loaded. Keep that in mind when selecting metrics, retention, and scrape
+    intervals.
+
 ## OWASP Core Rule Set
 
 Set `crsEnabled: true` to make the embedded CRS files available, then include

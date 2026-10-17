@@ -43,15 +43,17 @@ import (
 	"github.com/traefik/traefik/v3/pkg/middlewares/stripprefix"
 	"github.com/traefik/traefik/v3/pkg/middlewares/stripprefixregex"
 	"github.com/traefik/traefik/v3/pkg/middlewares/tap"
+	"github.com/traefik/traefik/v3/pkg/observability/metrics"
 	"github.com/traefik/traefik/v3/pkg/server/provider"
 	"github.com/traefik/traefik/v3/pkg/server/recursion"
 )
 
 // Builder the middleware builder.
 type Builder struct {
-	configs        map[string]*runtime.MiddlewareInfo
-	pluginBuilder  PluginsBuilder
-	serviceBuilder serviceBuilder
+	configs         map[string]*runtime.MiddlewareInfo
+	pluginBuilder   PluginsBuilder
+	serviceBuilder  serviceBuilder
+	metricsRegistry metrics.Registry
 }
 
 type serviceBuilder interface {
@@ -60,7 +62,23 @@ type serviceBuilder interface {
 
 // NewBuilder creates a new Builder.
 func NewBuilder(configs map[string]*runtime.MiddlewareInfo, serviceBuilder serviceBuilder, pluginBuilder PluginsBuilder) *Builder {
-	return &Builder{configs: configs, serviceBuilder: serviceBuilder, pluginBuilder: pluginBuilder}
+	return &Builder{
+		configs:         configs,
+		serviceBuilder:  serviceBuilder,
+		pluginBuilder:   pluginBuilder,
+		metricsRegistry: metrics.NewVoidRegistry(),
+	}
+}
+
+// SetMetricsRegistry sets the metrics registry used by middleware implementations.
+func (b *Builder) SetMetricsRegistry(registry metrics.Registry) *Builder {
+	if registry == nil {
+		registry = metrics.NewVoidRegistry()
+	}
+
+	b.metricsRegistry = registry
+
+	return b
 }
 
 // BuildMiddlewareChain creates a middleware chain.
@@ -430,7 +448,7 @@ func (b *Builder) buildConstructor(ctx context.Context, middlewareName string) (
 			}
 
 			middleware = func(next http.Handler) (http.Handler, error) {
-				return corazamiddleware.FromPlugin(ctx, next, rawPluginConfig, middlewareName)
+				return corazamiddleware.FromPlugin(ctx, next, rawPluginConfig, middlewareName, b.metricsRegistry)
 			}
 		} else if !reflect.ValueOf(b.pluginBuilder).IsNil() { // Using "reflect" because "b.pluginBuilder" is an interface.
 			if middleware != nil {

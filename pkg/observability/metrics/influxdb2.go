@@ -50,6 +50,11 @@ const (
 	influxDBServiceServerUpName     = "traefik.service.server.up"
 	influxDBServiceReqsBytesName    = "traefik.service.requests.bytes.total"
 	influxDBServiceRespsBytesName   = "traefik.service.responses.bytes.total"
+
+	influxDBWAFRequestsName        = "traefik.waf.requests.total"
+	influxDBWAFInterruptionsName   = "traefik.waf.interruptions.total"
+	influxDBWAFRequestDurationName = "traefik.waf.request.duration"
+	influxDBWAFRuleMatchesName     = "traefik.waf.rule.matches.total"
 )
 
 // RegisterInfluxDB2 creates metrics exporter for InfluxDB2.
@@ -114,6 +119,11 @@ func RegisterInfluxDB2(ctx context.Context, config *otypes.InfluxDB2) Registry {
 		registry.serviceReqsBytesCounter = influxDB2Store.NewCounter(influxDBServiceReqsBytesName)
 		registry.serviceRespsBytesCounter = influxDB2Store.NewCounter(influxDBServiceRespsBytesName)
 	}
+
+	registry.wafRequestsCounter = influxDB2Store.NewCounter(influxDBWAFRequestsName)
+	registry.wafInterruptionsCounter = influxDB2Store.NewCounter(influxDBWAFInterruptionsName)
+	registry.wafRequestDurationHistogram, _ = NewHistogramWithScale(influxDB2Store.NewHistogram(influxDBWAFRequestDurationName), time.Second)
+	registry.wafRuleMatchesCounter = influxDB2Store.NewCounter(influxDBWAFRuleMatchesName)
 
 	return registry
 }

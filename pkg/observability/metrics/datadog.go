@@ -53,6 +53,11 @@ const (
 	ddServiceServerUpName     = "service.server.up"
 	ddServiceReqsBytesName    = "service.requests.bytes.total"
 	ddServiceRespsBytesName   = "service.responses.bytes.total"
+
+	ddWAFRequestsName        = "waf.request.total"
+	ddWAFInterruptionsName   = "waf.interruptions.total"
+	ddWAFRequestDurationName = "waf.request.duration"
+	ddWAFRuleMatchesName     = "waf.rule.matches.total"
 )
 
 // RegisterDatadog registers the metrics pusher if this didn't happen yet and creates a datadog Registry instance.
@@ -105,6 +110,11 @@ func RegisterDatadog(ctx context.Context, config *otypes.Datadog) Registry {
 		registry.serviceReqsBytesCounter = datadogClient.NewCounter(ddServiceReqsBytesName, 1.0)
 		registry.serviceRespsBytesCounter = datadogClient.NewCounter(ddServiceRespsBytesName, 1.0)
 	}
+
+	registry.wafRequestsCounter = datadogClient.NewCounter(ddWAFRequestsName, 1.0)
+	registry.wafInterruptionsCounter = datadogClient.NewCounter(ddWAFInterruptionsName, 1.0)
+	registry.wafRequestDurationHistogram, _ = NewHistogramWithScale(datadogClient.NewHistogram(ddWAFRequestDurationName, 1.0), time.Second)
+	registry.wafRuleMatchesCounter = datadogClient.NewCounter(ddWAFRuleMatchesName, 1.0)
 
 	return registry
 }

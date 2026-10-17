@@ -54,6 +54,13 @@ type Registry interface {
 	ServiceServerUpGauge() metrics.Gauge
 	ServiceReqsBytesCounter() metrics.Counter
 	ServiceRespsBytesCounter() metrics.Counter
+
+	// WAF metrics
+
+	WAFRequestsCounter() metrics.Counter
+	WAFInterruptionsCounter() metrics.Counter
+	WAFRequestDurationHistogram() ScalableHistogram
+	WAFRuleMatchesCounter() metrics.Counter
 }
 
 // NewVoidRegistry is a noop implementation of metrics.Registry.
@@ -87,6 +94,10 @@ func NewMultiRegistry(registries []Registry) Registry {
 	var serviceServerUpGauge []metrics.Gauge
 	var serviceReqsBytesCounter []metrics.Counter
 	var serviceRespsBytesCounter []metrics.Counter
+	var wafRequestsCounter []metrics.Counter
+	var wafInterruptionsCounter []metrics.Counter
+	var wafRequestDurationHistogram []ScalableHistogram
+	var wafRuleMatchesCounter []metrics.Counter
 
 	for _, r := range registries {
 		if r.ConfigReloadsCounter() != nil {
@@ -152,6 +163,18 @@ func NewMultiRegistry(registries []Registry) Registry {
 		if r.ServiceRespsBytesCounter() != nil {
 			serviceRespsBytesCounter = append(serviceRespsBytesCounter, r.ServiceRespsBytesCounter())
 		}
+		if r.WAFRequestsCounter() != nil {
+			wafRequestsCounter = append(wafRequestsCounter, r.WAFRequestsCounter())
+		}
+		if r.WAFInterruptionsCounter() != nil {
+			wafInterruptionsCounter = append(wafInterruptionsCounter, r.WAFInterruptionsCounter())
+		}
+		if r.WAFRequestDurationHistogram() != nil {
+			wafRequestDurationHistogram = append(wafRequestDurationHistogram, r.WAFRequestDurationHistogram())
+		}
+		if r.WAFRuleMatchesCounter() != nil {
+			wafRuleMatchesCounter = append(wafRuleMatchesCounter, r.WAFRuleMatchesCounter())
+		}
 	}
 
 	return &standardRegistry{
@@ -179,6 +202,10 @@ func NewMultiRegistry(registries []Registry) Registry {
 		serviceServerUpGauge:           multi.NewGauge(serviceServerUpGauge...),
 		serviceReqsBytesCounter:        multi.NewCounter(serviceReqsBytesCounter...),
 		serviceRespsBytesCounter:       multi.NewCounter(serviceRespsBytesCounter...),
+		wafRequestsCounter:             multi.NewCounter(wafRequestsCounter...),
+		wafInterruptionsCounter:        multi.NewCounter(wafInterruptionsCounter...),
+		wafRequestDurationHistogram:    MultiHistogram(wafRequestDurationHistogram),
+		wafRuleMatchesCounter:          multi.NewCounter(wafRuleMatchesCounter...),
 	}
 }
 
@@ -207,6 +234,10 @@ type standardRegistry struct {
 	serviceServerUpGauge           metrics.Gauge
 	serviceReqsBytesCounter        metrics.Counter
 	serviceRespsBytesCounter       metrics.Counter
+	wafRequestsCounter             metrics.Counter
+	wafInterruptionsCounter        metrics.Counter
+	wafRequestDurationHistogram    ScalableHistogram
+	wafRuleMatchesCounter          metrics.Counter
 }
 
 func (r *standardRegistry) IsEpEnabled() bool {
@@ -303,6 +334,22 @@ func (r *standardRegistry) ServiceReqsBytesCounter() metrics.Counter {
 
 func (r *standardRegistry) ServiceRespsBytesCounter() metrics.Counter {
 	return r.serviceRespsBytesCounter
+}
+
+func (r *standardRegistry) WAFRequestsCounter() metrics.Counter {
+	return r.wafRequestsCounter
+}
+
+func (r *standardRegistry) WAFInterruptionsCounter() metrics.Counter {
+	return r.wafInterruptionsCounter
+}
+
+func (r *standardRegistry) WAFRequestDurationHistogram() ScalableHistogram {
+	return r.wafRequestDurationHistogram
+}
+
+func (r *standardRegistry) WAFRuleMatchesCounter() metrics.Counter {
+	return r.wafRuleMatchesCounter
 }
 
 // ScalableHistogram is a Histogram with a predefined time unit,

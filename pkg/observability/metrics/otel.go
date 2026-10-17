@@ -172,6 +172,15 @@ func RegisterOpenTelemetry(ctx context.Context, config *otypes.OTLP) Registry {
 			"The total size of responses in bytes returned by a service, partitioned by status code, protocol, and method.")
 	}
 
+	reg.wafRequestsCounter = newOTLPCounterFrom(meter, wafRequestsTotalName,
+		"How many HTTP requests were processed by the WAF, partitioned by middleware and outcome.")
+	reg.wafInterruptionsCounter = newOTLPCounterFrom(meter, wafInterruptionsTotalName,
+		"How many WAF interruptions occurred, partitioned by middleware, action, rule, phase, and status.")
+	reg.wafRequestDurationHistogram, _ = NewHistogramWithScale(newOTLPHistogramFrom(meter, wafRequestDurationName,
+		"How long the WAF took to process a request, partitioned by middleware and outcome.", "s"), time.Second)
+	reg.wafRuleMatchesCounter = newOTLPCounterFrom(meter, wafRuleMatchesTotalName,
+		"How many WAF rules matched, partitioned by middleware, rule, and severity.")
+
 	return reg
 }
 
