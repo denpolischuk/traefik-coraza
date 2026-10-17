@@ -17,6 +17,7 @@ import (
 	"github.com/traefik/traefik/v3/pkg/middlewares/circuitbreaker"
 	"github.com/traefik/traefik/v3/pkg/middlewares/compress"
 	"github.com/traefik/traefik/v3/pkg/middlewares/contenttype"
+	corazamiddleware "github.com/traefik/traefik/v3/pkg/middlewares/coraza"
 	"github.com/traefik/traefik/v3/pkg/middlewares/customerrors"
 	"github.com/traefik/traefik/v3/pkg/middlewares/encodedcharacters"
 	"github.com/traefik/traefik/v3/pkg/middlewares/gatewayapi/headermodifier"
@@ -416,23 +417,39 @@ func (b *Builder) buildConstructor(ctx context.Context, middlewareName string) (
 	}
 
 	// Plugin
-	if config.Plugin != nil && !reflect.ValueOf(b.pluginBuilder).IsNil() { // Using "reflect" because "b.pluginBuilder" is an interface.
-		if middleware != nil {
-			return nil, badConf
-		}
+	if config.Plugin != nil {
+		if rawPluginConfig, ok := config.Plugin["coraza"]; ok {
+			// Coraza is a native, built-in middleware. It is exposed through the
+			// plugin configuration key to remain compatible with Traefik Hub.
+			if len(config.Plugin) != 1 {
+				return nil, fmt.Errorf("plugin: invalid configuration: no configuration or too many plugin definition")
+			}
 
-		pluginType, rawPluginConfig, err := findPluginConfig(config.Plugin)
-		if err != nil {
-			return nil, fmt.Errorf("plugin: %w", err)
-		}
+			if middleware != nil {
+				return nil, badConf
+			}
 
-		plug, err := b.pluginBuilder.Build(pluginType, rawPluginConfig, middlewareName)
-		if err != nil {
-			return nil, fmt.Errorf("plugin: %w", err)
-		}
+			middleware = func(next http.Handler) (http.Handler, error) {
+				return corazamiddleware.FromPlugin(ctx, next, rawPluginConfig, middlewareName)
+			}
+		} else if !reflect.ValueOf(b.pluginBuilder).IsNil() { // Using "reflect" because "b.pluginBuilder" is an interface.
+			if middleware != nil {
+				return nil, badConf
+			}
 
-		middleware = func(next http.Handler) (http.Handler, error) {
-			return newTraceablePlugin(ctx, middlewareName, plug, next)
+			pluginType, rawPluginConfig, err := findPluginConfig(config.Plugin)
+			if err != nil {
+				return nil, fmt.Errorf("plugin: %w", err)
+			}
+
+			plug, err := b.pluginBuilder.Build(pluginType, rawPluginConfig, middlewareName)
+			if err != nil {
+				return nil, fmt.Errorf("plugin: %w", err)
+			}
+
+			middleware = func(next http.Handler) (http.Handler, error) {
+				return newTraceablePlugin(ctx, middlewareName, plug, next)
+			}
 		}
 	}
 

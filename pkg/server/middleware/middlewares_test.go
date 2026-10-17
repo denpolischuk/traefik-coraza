@@ -321,6 +321,14 @@ func TestBuilder_buildConstructor(t *testing.T) {
 				MemResponseBodyBytes: 5,
 			},
 		},
+		"coraza-native": {
+			Plugin: map[string]dynamic.PluginConf{
+				"coraza": {
+					"directives": []any{"SecRuleEngine On"},
+					"crsEnabled": "false",
+				},
+			},
+		},
 	}
 
 	rtConf := runtime.NewConfig(dynamic.Configuration{
@@ -358,6 +366,11 @@ func TestBuilder_buildConstructor(t *testing.T) {
 		{
 			desc:          "Should create an AddPrefix middleware when given a valid configuration",
 			middlewareID:  "ap-foo",
+			expectedError: false,
+		},
+		{
+			desc:          "Should create the native Coraza middleware",
+			middlewareID:  "coraza-native",
 			expectedError: false,
 		},
 	}
