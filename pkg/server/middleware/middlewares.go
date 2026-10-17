@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"sync"
 
 	"github.com/containous/alice"
 	"github.com/rs/zerolog/log"
@@ -54,10 +55,18 @@ type Builder struct {
 	pluginBuilder   PluginsBuilder
 	serviceBuilder  serviceBuilder
 	metricsRegistry metrics.Registry
+
+	releasesMu sync.Mutex
+	releases   []func()
+	closed     bool
 }
 
 type serviceBuilder interface {
 	BuildHTTP(ctx context.Context, serviceName string) (http.Handler, error)
+}
+
+type middlewareReleaser interface {
+	Release()
 }
 
 // NewBuilder creates a new Builder.
@@ -79,6 +88,41 @@ func (b *Builder) SetMetricsRegistry(registry metrics.Registry) *Builder {
 	b.metricsRegistry = registry
 
 	return b
+}
+
+// trackRelease registers a release function for a middleware resource that
+// must be released when the builder is retired.
+func (b *Builder) trackRelease(release func()) {
+	b.releasesMu.Lock()
+	if b.closed {
+		b.releasesMu.Unlock()
+
+		release()
+
+		return
+	}
+
+	b.releases = append(b.releases, release)
+	b.releasesMu.Unlock()
+}
+
+// Close releases all resources owned by the built middlewares.
+// It is safe to call multiple times.
+func (b *Builder) Close() {
+	b.releasesMu.Lock()
+	if b.closed {
+		b.releasesMu.Unlock()
+		return
+	}
+
+	b.closed = true
+	releases := b.releases
+	b.releases = nil
+	b.releasesMu.Unlock()
+
+	for _, release := range releases {
+		release()
+	}
 }
 
 // BuildMiddlewareChain creates a middleware chain.
@@ -448,7 +492,16 @@ func (b *Builder) buildConstructor(ctx context.Context, middlewareName string) (
 			}
 
 			middleware = func(next http.Handler) (http.Handler, error) {
-				return corazamiddleware.FromPlugin(ctx, next, rawPluginConfig, middlewareName, b.metricsRegistry)
+				handler, err := corazamiddleware.FromPlugin(ctx, next, rawPluginConfig, middlewareName, b.metricsRegistry)
+				if err != nil {
+					return nil, err
+				}
+
+				if releaser, ok := handler.(middlewareReleaser); ok {
+					b.trackRelease(releaser.Release)
+				}
+
+				return handler, nil
 			}
 		} else if !reflect.ValueOf(b.pluginBuilder).IsNil() { // Using "reflect" because "b.pluginBuilder" is an interface.
 			if middleware != nil {

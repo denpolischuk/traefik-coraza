@@ -35,6 +35,9 @@ type RouterFactory struct {
 	observabilityMgr *middleware.ObservabilityMgr
 	tlsManager       *tls.Manager
 
+	currentMiddlewaresBuilder  *middleware.Builder
+	previousMiddlewaresBuilder *middleware.Builder
+
 	dialerManager *tcp.DialerManager
 
 	cancelPrevState func()
@@ -109,8 +112,11 @@ func (f *RouterFactory) CreateRouters(rtConf *runtime.Configuration) (map[string
 	// HTTP
 	serviceManager := f.managerFactory.Build(rtConf)
 
+	f.previousMiddlewaresBuilder = f.currentMiddlewaresBuilder
+
 	middlewaresBuilder := middleware.NewBuilder(rtConf.Middlewares, serviceManager, f.pluginBuilder).
 		SetMetricsRegistry(f.observabilityMgr.MetricsRegistry())
+	f.currentMiddlewaresBuilder = middlewaresBuilder
 
 	serviceManager.SetMiddlewareChainBuilder(middlewaresBuilder)
 
@@ -147,4 +153,15 @@ func (f *RouterFactory) CreateRouters(rtConf *runtime.Configuration) (map[string
 	rtConf.PopulateUsedBy()
 
 	return routersTCP, routersUDP
+}
+
+// ClosePreviousState releases resources owned by the previous middleware builder.
+// It must be called after the new routers have been switched in.
+func (f *RouterFactory) ClosePreviousState() {
+	if f.previousMiddlewaresBuilder == nil {
+		return
+	}
+
+	f.previousMiddlewaresBuilder.Close()
+	f.previousMiddlewaresBuilder = nil
 }

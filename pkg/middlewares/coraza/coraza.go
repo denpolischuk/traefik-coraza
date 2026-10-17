@@ -3,7 +3,7 @@ package coraza
 import (
 	"context"
 	"net/http"
-	"runtime"
+	"sync"
 
 	corazahttp "github.com/corazawaf/coraza/v3/http"
 	"github.com/traefik/traefik/v3/pkg/middlewares"
@@ -11,10 +11,11 @@ import (
 )
 
 type wafMiddleware struct {
-	name    string
-	handler http.Handler
-	manager *wafManager
-	hash    string
+	name        string
+	handler     http.Handler
+	manager     *wafManager
+	hash        string
+	releaseOnce sync.Once
 }
 
 // FromPlugin creates a native Coraza middleware from a plugin-style configuration.
@@ -49,11 +50,15 @@ func New(ctx context.Context, next http.Handler, config Configuration, name stri
 		hash:    hash,
 	}
 
-	runtime.SetFinalizer(middleware, func(m *wafMiddleware) {
+	return middleware, nil
+}
+
+// Release releases the WAF reference held by this middleware.
+// It is safe to call multiple times.
+func (m *wafMiddleware) Release() {
+	m.releaseOnce.Do(func() {
 		m.manager.release(m.hash)
 	})
-
-	return middleware, nil
 }
 
 func (m *wafMiddleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {

@@ -13,6 +13,22 @@ import (
 	"github.com/traefik/traefik/v3/pkg/server/provider"
 )
 
+func TestBuilder_Close(t *testing.T) {
+	builder := NewBuilder(nil, nil, nil)
+
+	var released int
+	builder.trackRelease(func() { released++ })
+
+	builder.Close()
+	builder.Close()
+
+	assert.Equal(t, 1, released)
+
+	// A release registered after Close is executed immediately.
+	builder.trackRelease(func() { released++ })
+	assert.Equal(t, 2, released)
+}
+
 func TestBuilder_BuildChainNilConfig(t *testing.T) {
 	testConfig := map[string]*runtime.MiddlewareInfo{
 		"empty": {},

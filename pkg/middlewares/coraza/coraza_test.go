@@ -16,6 +16,39 @@ func TestNew_RequiresDirectives(t *testing.T) {
 	require.EqualError(t, err, "missing directives values")
 }
 
+func TestWAFMiddleware_Release(t *testing.T) {
+	config := Configuration{
+		Directives: []string{
+			"SecRuleEngine On",
+			`SecRule REQUEST_URI "@streq /release" "id:103,phase:1,pass"`,
+		},
+	}
+
+	handler, err := New(context.Background(), http.NotFoundHandler(), config, "test", traefikmetrics.NewVoidRegistry())
+	require.NoError(t, err)
+
+	middleware, ok := handler.(*wafMiddleware)
+	require.True(t, ok)
+
+	hash, err := hashConfig(config)
+	require.NoError(t, err)
+
+	defaultWAFManager.mu.Lock()
+	entry := defaultWAFManager.entries[hash]
+	defaultWAFManager.mu.Unlock()
+	require.NotNil(t, entry)
+	assert.Equal(t, 1, entry.refs)
+
+	middleware.Release()
+	middleware.Release()
+
+	defaultWAFManager.mu.Lock()
+	entry = defaultWAFManager.entries[hash]
+	defaultWAFManager.mu.Unlock()
+	require.NotNil(t, entry)
+	assert.Equal(t, 0, entry.refs)
+}
+
 func TestDecodeConfiguration_StringValues(t *testing.T) {
 	config, err := decodeConfiguration(map[string]any{
 		"directives": "SecRuleEngine On",
