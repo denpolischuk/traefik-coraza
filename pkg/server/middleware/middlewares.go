@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"sync"
 
 	"github.com/containous/alice"
 	"github.com/rs/zerolog/log"
@@ -17,6 +18,7 @@ import (
 	"github.com/traefik/traefik/v3/pkg/middlewares/circuitbreaker"
 	"github.com/traefik/traefik/v3/pkg/middlewares/compress"
 	"github.com/traefik/traefik/v3/pkg/middlewares/contenttype"
+	corazamiddleware "github.com/traefik/traefik/v3/pkg/middlewares/coraza"
 	"github.com/traefik/traefik/v3/pkg/middlewares/customerrors"
 	"github.com/traefik/traefik/v3/pkg/middlewares/encodedcharacters"
 	"github.com/traefik/traefik/v3/pkg/middlewares/gatewayapi/headermodifier"
@@ -42,24 +44,85 @@ import (
 	"github.com/traefik/traefik/v3/pkg/middlewares/stripprefix"
 	"github.com/traefik/traefik/v3/pkg/middlewares/stripprefixregex"
 	"github.com/traefik/traefik/v3/pkg/middlewares/tap"
+	"github.com/traefik/traefik/v3/pkg/observability/metrics"
 	"github.com/traefik/traefik/v3/pkg/server/provider"
 	"github.com/traefik/traefik/v3/pkg/server/recursion"
 )
 
 // Builder the middleware builder.
 type Builder struct {
-	configs        map[string]*runtime.MiddlewareInfo
-	pluginBuilder  PluginsBuilder
-	serviceBuilder serviceBuilder
+	configs         map[string]*runtime.MiddlewareInfo
+	pluginBuilder   PluginsBuilder
+	serviceBuilder  serviceBuilder
+	metricsRegistry metrics.Registry
+
+	releasesMu sync.Mutex
+	releases   []func()
+	closed     bool
 }
 
 type serviceBuilder interface {
 	BuildHTTP(ctx context.Context, serviceName string) (http.Handler, error)
 }
 
+type middlewareReleaser interface {
+	Release()
+}
+
 // NewBuilder creates a new Builder.
 func NewBuilder(configs map[string]*runtime.MiddlewareInfo, serviceBuilder serviceBuilder, pluginBuilder PluginsBuilder) *Builder {
-	return &Builder{configs: configs, serviceBuilder: serviceBuilder, pluginBuilder: pluginBuilder}
+	return &Builder{
+		configs:         configs,
+		serviceBuilder:  serviceBuilder,
+		pluginBuilder:   pluginBuilder,
+		metricsRegistry: metrics.NewVoidRegistry(),
+	}
+}
+
+// SetMetricsRegistry sets the metrics registry used by middleware implementations.
+func (b *Builder) SetMetricsRegistry(registry metrics.Registry) *Builder {
+	if registry == nil {
+		registry = metrics.NewVoidRegistry()
+	}
+
+	b.metricsRegistry = registry
+
+	return b
+}
+
+// trackRelease registers a release function for a middleware resource that
+// must be released when the builder is retired.
+func (b *Builder) trackRelease(release func()) {
+	b.releasesMu.Lock()
+	if b.closed {
+		b.releasesMu.Unlock()
+
+		release()
+
+		return
+	}
+
+	b.releases = append(b.releases, release)
+	b.releasesMu.Unlock()
+}
+
+// Close releases all resources owned by the built middlewares.
+// It is safe to call multiple times.
+func (b *Builder) Close() {
+	b.releasesMu.Lock()
+	if b.closed {
+		b.releasesMu.Unlock()
+		return
+	}
+
+	b.closed = true
+	releases := b.releases
+	b.releases = nil
+	b.releasesMu.Unlock()
+
+	for _, release := range releases {
+		release()
+	}
 }
 
 // BuildMiddlewareChain creates a middleware chain.
@@ -416,23 +479,48 @@ func (b *Builder) buildConstructor(ctx context.Context, middlewareName string) (
 	}
 
 	// Plugin
-	if config.Plugin != nil && !reflect.ValueOf(b.pluginBuilder).IsNil() { // Using "reflect" because "b.pluginBuilder" is an interface.
-		if middleware != nil {
-			return nil, badConf
-		}
+	if config.Plugin != nil {
+		if rawPluginConfig, ok := config.Plugin["coraza"]; ok {
+			// Coraza is a native, built-in middleware. It is exposed through the
+			// plugin configuration key to remain compatible with Traefik Hub.
+			if len(config.Plugin) != 1 {
+				return nil, fmt.Errorf("plugin: invalid configuration: no configuration or too many plugin definition")
+			}
 
-		pluginType, rawPluginConfig, err := findPluginConfig(config.Plugin)
-		if err != nil {
-			return nil, fmt.Errorf("plugin: %w", err)
-		}
+			if middleware != nil {
+				return nil, badConf
+			}
 
-		plug, err := b.pluginBuilder.Build(pluginType, rawPluginConfig, middlewareName)
-		if err != nil {
-			return nil, fmt.Errorf("plugin: %w", err)
-		}
+			middleware = func(next http.Handler) (http.Handler, error) {
+				handler, err := corazamiddleware.FromPlugin(ctx, next, rawPluginConfig, middlewareName, b.metricsRegistry)
+				if err != nil {
+					return nil, err
+				}
 
-		middleware = func(next http.Handler) (http.Handler, error) {
-			return newTraceablePlugin(ctx, middlewareName, plug, next)
+				if releaser, ok := handler.(middlewareReleaser); ok {
+					b.trackRelease(releaser.Release)
+				}
+
+				return handler, nil
+			}
+		} else if !reflect.ValueOf(b.pluginBuilder).IsNil() { // Using "reflect" because "b.pluginBuilder" is an interface.
+			if middleware != nil {
+				return nil, badConf
+			}
+
+			pluginType, rawPluginConfig, err := findPluginConfig(config.Plugin)
+			if err != nil {
+				return nil, fmt.Errorf("plugin: %w", err)
+			}
+
+			plug, err := b.pluginBuilder.Build(pluginType, rawPluginConfig, middlewareName)
+			if err != nil {
+				return nil, fmt.Errorf("plugin: %w", err)
+			}
+
+			middleware = func(next http.Handler) (http.Handler, error) {
+				return newTraceablePlugin(ctx, middlewareName, plug, next)
+			}
 		}
 	}
 

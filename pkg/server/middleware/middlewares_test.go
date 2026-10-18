@@ -13,6 +13,22 @@ import (
 	"github.com/traefik/traefik/v3/pkg/server/provider"
 )
 
+func TestBuilder_Close(t *testing.T) {
+	builder := NewBuilder(nil, nil, nil)
+
+	var released int
+	builder.trackRelease(func() { released++ })
+
+	builder.Close()
+	builder.Close()
+
+	assert.Equal(t, 1, released)
+
+	// A release registered after Close is executed immediately.
+	builder.trackRelease(func() { released++ })
+	assert.Equal(t, 2, released)
+}
+
 func TestBuilder_BuildChainNilConfig(t *testing.T) {
 	testConfig := map[string]*runtime.MiddlewareInfo{
 		"empty": {},
@@ -321,6 +337,14 @@ func TestBuilder_buildConstructor(t *testing.T) {
 				MemResponseBodyBytes: 5,
 			},
 		},
+		"coraza-native": {
+			Plugin: map[string]dynamic.PluginConf{
+				"coraza": {
+					"directives": []any{"SecRuleEngine On"},
+					"crsEnabled": "false",
+				},
+			},
+		},
 	}
 
 	rtConf := runtime.NewConfig(dynamic.Configuration{
@@ -358,6 +382,11 @@ func TestBuilder_buildConstructor(t *testing.T) {
 		{
 			desc:          "Should create an AddPrefix middleware when given a valid configuration",
 			middlewareID:  "ap-foo",
+			expectedError: false,
+		},
+		{
+			desc:          "Should create the native Coraza middleware",
+			middlewareID:  "coraza-native",
 			expectedError: false,
 		},
 	}

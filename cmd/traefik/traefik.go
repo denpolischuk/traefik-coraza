@@ -456,6 +456,10 @@ func switchRouter(routerFactory *server.RouterFactory, serverEntryPointsTCP serv
 
 		serverEntryPointsTCP.Switch(routers)
 		serverEntryPointsUDP.Switch(udpRouters)
+
+		// The new routers are now serving. Release resources owned by the
+		// previous middleware builder.
+		routerFactory.ClosePreviousState()
 	}
 }
 
